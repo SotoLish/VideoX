@@ -1,0 +1,2 @@
+请用 Android Studio 的 Image Asset Studio 生成 icon-192.png 和 icon-512.png
+或者直接把 icon-192.svg 转成 PNG 放入此目录。

@@ -9,7 +9,7 @@ const state = {
   showHidden: true,    // 是否显示隐藏文件夹
   speed: 1,            // 当前倍速
   duration: 0,         // 视频时长
-  isSeeking: false,    // 是否正在拖动进度条
+  isSeeking: false,     // 是否正在拖动进度条
   controlsVisible: true,
   controlsTimer: null,
   orientBarTimer: null, // 适应模式提示条定时器
@@ -24,6 +24,10 @@ const state = {
   videoHeight: 0,
   // 适应模式：'contain' | 'cover' | 'rotate'
   fitMode: 'contain',
+  // NAS 文件列表
+  nasFiles: null,      // NAS 文件数组 [{name,size,path}]
+  nasBaseUrl: '',      // NAS 基础 URL
+  nasIndex: -1,        // NAS 当前播放索引
 };
 
 // ==================== DOM 获取 ====================
@@ -111,6 +115,16 @@ function isVideoFile(name) {
   return /\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|m2ts|3gp|rmvb|rm|hevc|h265|mpg|mpeg|ogv|vob|divx|xvid)$/i.test(name);
 }
 
+// RMVB/RM 格式需要原生播放器，浏览器不支持
+function isRmvbFile(name) {
+  return /\.(rmvb|rm)$/i.test(name);
+}
+
+// 需要原生播放器的格式（WebView 不支持）
+function needsNativePlayer(name) {
+  return /\.(rmvb|rm|wmv|asf|vob|evo|divx|xvid|ogv|ogm)$/i.test(name);
+}
+
 function isHidden(name) {
   return name.startsWith('.');
 }
@@ -126,6 +140,7 @@ function showBurst(icon) {
 function processFileList(fileArray) {
   const structure = {};
   const allVideos = [];
+  const rmvbFiles = [];
 
   fileArray.forEach(file => {
     const parts = file.webkitRelativePath ? file.webkitRelativePath.split('/') : [file.name];
@@ -145,6 +160,9 @@ function processFileList(fileArray) {
 
     if (isVideoFile(fileName)) {
       file._dir = dirPath;
+      if (isRmvbFile(fileName)) {
+        rmvbFiles.push(fileName);
+      }
       structure[dirPath].files.push(file);
       allVideos.push(file);
     }
@@ -155,6 +173,11 @@ function processFileList(fileArray) {
   state.folderStack = [];
   renderBreadcrumb();
   renderFolder('root');
+
+  // RMVB 格式提示
+  if (rmvbFiles.length > 0) {
+    showRmvbWarning(rmvbFiles.length);
+  }
 
   if (allVideos.length === 0) {
     fileList.innerHTML = `
@@ -336,6 +359,12 @@ function playVideo(index) {
   state.currentIndex = index;
   const file = state.files[index];
 
+  // 检测是否需要原生播放器
+  if (needsNativePlayer(file.name)) {
+    playNative(file);
+    return;
+  }
+
   // 释放上一个 blob URL
   if (video.src && video.src.startsWith('blob:')) {
     URL.revokeObjectURL(video.src);
@@ -354,6 +383,26 @@ function playVideo(index) {
   renderPlaylist();
   highlightPlaylistItem();
   scheduleHideControls();
+}
+
+// ==================== 原生播放器（Capacitor 插件）====================
+async function playNative(file) {
+  try {
+    // 尝试通过 Capacitor 插件播放
+    const { VideoXPlayer } = window.Capacitor?.Plugins || {};
+    if (VideoXPlayer) {
+      // 获取文件的真实路径（需要 File 对象的本地路径）
+      const filePath = file.path || file.webkitRelativePath || '';
+      await VideoXPlayer.play({ path: filePath, name: file.name });
+    } else {
+      // 降级：显示提示
+      alert('⚠️ ' + file.name + '\n\n此格式（' + file.name.split('.').pop().toUpperCase() + '）需要原生播放器支持\n请在 APK 中运行此功能');
+    }
+  } catch (e) {
+    // 插件不可用时降级
+    console.warn('[VideoX] 原生播放器不可用:', e.message);
+    alert('⚠️ ' + file.name + '\n\n需要原生播放器（仅 APK 版本支持）\n建议转码为 MP4 后在浏览器中播放');
+  }
 }
 
 // ==================== 视频方向检测 ====================
@@ -486,7 +535,11 @@ video.addEventListener('pause', () => {
 video.addEventListener('ended', () => {
   iconPlay.style.display = '';
   iconPause.style.display = 'none';
-  if (state.currentIndex < state.files.length - 1) {
+  // 优先 NAS 列表，再本地列表
+  if (state.nasFiles && state.nasIndex < state.nasFiles.length - 1) {
+    const next = state.nasFiles[state.nasIndex + 1];
+    playNasVideo(next, state.nasBaseUrl, state.nasFiles);
+  } else if (state.currentIndex >= 0 && state.currentIndex < state.files.length - 1) {
     setTimeout(() => playVideo(state.currentIndex + 1), 800);
   }
 });
@@ -918,6 +971,104 @@ videoWrap.addEventListener('touchend', () => {
     hintRight.classList.remove('show');
   }, 600);
 });
+
+// ==================== RMVB 格式提示 ====================
+function showRmvbWarning(count) {
+  const toast = document.createElement('div');
+  toast.className = 'rmvb-toast';
+  toast.innerHTML = `
+    <div class="rmvb-toast-icon">✅</div>
+    <div class="rmvb-toast-body">
+      <div class="rmvb-toast-title">发现 ${count} 个特殊格式文件</div>
+      <div class="rmvb-toast-desc">RMVB/RM 等格式将通过原生播放器播放（仅 APK 版本支持）</div>
+      <div class="rmvb-toast-actions">
+        <button class="rmvb-btn" onclick="this.closest('.rmvb-toast').remove()">知道了</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 6000);
+}
+
+// ==================== NAS 读取 ====================
+const btnNas = $('btn-nas');
+const nasUrlInput = $('nas-url-input');
+
+btnNas.addEventListener('click', () => {
+  const url = prompt('输入 NAS 视频目录的 HTTP 地址\n（需要先运行 VideoX NAS 服务端）', state.nasUrl || 'http://');
+  if (!url) return;
+  state.nasUrl = url;
+  loadNasFiles(url);
+});
+
+async function loadNasFiles(baseUrl) {
+  try {
+    scanBanner.classList.add('hidden');
+    fileList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>正在从 NAS 读取...</p></div>';
+
+    // 尝试获取文件列表（期望返回 JSON）
+    const resp = await fetch(baseUrl + '/list', { mode: 'cors' });
+    if (!resp.ok) throw new Error('无法连接 NAS 服务');
+    const data = await resp.json();
+    // data 格式：{ files: [{ name, size, path }] }
+    if (!data.files || data.files.length === 0) {
+      fileList.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>NAS 目录为空</p></div>';
+      return;
+    }
+    renderNasFiles(data.files, baseUrl);
+  } catch (e) {
+    // 如果 /list 接口不存在，提示用户运行服务端
+    fileList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🌐</div>
+        <p>无法连接 NAS 服务</p>
+        <small>请在 NAS 上运行 VideoX 服务端，或使用「选择文件夹」</small>
+        <br/><br/>
+        <button class="btn-primary" onclick="location.reload()">刷新重试</button>
+      </div>`;
+  }
+}
+
+function renderNasFiles(files, baseUrl) {
+  fileList.innerHTML = '';
+  const label = document.createElement('div');
+  label.className = 'section-label';
+  label.textContent = `NAS 文件（${files.length}）`;
+  fileList.appendChild(label);
+
+  files.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'file-item video-item';
+    item.innerHTML = `
+      <div class="file-icon">🎬</div>
+      <div class="file-info">
+        <div class="file-name">${f.name}</div>
+        <div class="file-meta">${formatSize(f.size)}</div>
+      </div>
+      <span class="file-arrow">▶</span>
+    `;
+    item.addEventListener('click', () => playNasVideo(f, baseUrl, files));
+    fileList.appendChild(item);
+  });
+}
+
+async function playNasVideo(file, baseUrl, allFiles) {
+  if (isRmvbFile(file.name)) {
+    alert('⚠️ RMVB 格式不支持\n浏览器无法播放 RMVB/RM 格式，请先转码为 MP4');
+    return;
+  }
+  showPage('player');
+  videoTitle.textContent = file.name;
+  document.title = file.name + ' — VideoX';
+  video.src = baseUrl + '/file?path=' + encodeURIComponent(file.path);
+  video.load();
+  video.play().catch(() => {});
+  state.nasFiles = allFiles;
+  state.nasBaseUrl = baseUrl;
+  state.nasIndex = allFiles.findIndex(f => f.path === file.path);
+  scheduleHideControls();
+}
 
 // ==================== 初始化 ====================
 (function init() {

@@ -21,6 +21,15 @@
       <span class="app-name">VideoX</span>
     </div>
     <div class="topbar-right">
+      <button class="icon-btn" id="btn-nas" title="从 NAS 读取">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <rect x="2" y="2" width="20" height="8" rx="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2"/>
+          <circle cx="6" cy="6" r="1" fill="currentColor"/>
+          <circle cx="6" cy="18" r="1" fill="currentColor"/>
+        </svg>
+        <span>NAS</span>
+      </button>
       <button class="icon-btn" id="btn-toggle-hidden" title="显示/隐藏隐藏文件夹">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -60,6 +69,12 @@
          id="folder-input"
          webkitdirectory
          multiple
+         style="display:none" />
+
+  <!-- NAS 地址输入（支持 SMB / HTTP 文件列表） -->
+  <input type="text"
+         id="nas-url-input"
+         placeholder="输入 NAS 地址，如 http://192.168.1.100:8080"
          style="display:none" />
 
 </div>
@@ -200,6 +215,8 @@
       <button class="speed-opt" data-speed="1.5">1.5×</button>
       <button class="speed-opt" data-speed="2">2×</button>
       <button class="speed-opt" data-speed="3">3×</button>
+      <button class="speed-opt" data-speed="4">4×</button>
+      <button class="speed-opt" data-speed="6">6×</button>
     </div>
   </div>
 

@@ -24,6 +24,14 @@
 
         </activity>
 
+        <!-- VideoX 原生播放器 Activity（ExoPlayer） -->
+        <activity
+            android:name=".player.VideoXPlayerActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false"
+            android:hardwareAccelerated="true" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

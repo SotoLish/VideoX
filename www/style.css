@@ -544,6 +544,26 @@ html, body {
 }
 .overlay.active { display: block; }
 
+/* ===== RMVB 格式提示 Toast ===== */
+.rmvb-toast {
+  position: fixed; top: calc(var(--safe-top) + 60px); left: 12px; right: 12px;
+  background: #2a1a00; border: 1px solid #e85d04;
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; gap: 10px; align-items: flex-start;
+  z-index: 500; transform: translateY(-20px); opacity: 0;
+  transition: all 0.3s ease;
+}
+.rmvb-toast.show { transform: translateY(0); opacity: 1; }
+.rmvb-toast-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+.rmvb-toast-body { flex: 1; }
+.rmvb-toast-title { font-size: 14px; font-weight: 600; color: #ffaa44; }
+.rmvb-toast-desc { font-size: 12px; color: var(--text2); margin-top: 4px; }
+.rmvb-toast-actions { margin-top: 8px; display: flex; gap: 8px; }
+.rmvb-btn {
+  background: var(--accent); color: #fff; border: none;
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+}
+
 /* =======================================================
    ===== 横屏手机适配（手机横置，高度 <= 500px）
    ======================================================= */
