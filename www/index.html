@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<!-- ============ 页面一：文件浏览 ============ -->
+<!-- ============ 页面一：视频浏览 ============ -->
 <div id="page-browser" class="page active">
 
   <!-- 顶部栏 -->
@@ -22,74 +22,94 @@
     </div>
     <div class="topbar-right">
       <button class="icon-btn" id="btn-nas" title="从 NAS 读取">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-          <rect x="2" y="2" width="20" height="8" rx="2"/>
-          <rect x="2" y="14" width="20" height="8" rx="2"/>
-          <circle cx="6" cy="6" r="1" fill="currentColor"/>
-          <circle cx="6" cy="18" r="1" fill="currentColor"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+          <circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/>
         </svg>
         <span>NAS</span>
-      </button>
-      <button class="icon-btn" id="btn-toggle-hidden" title="显示/隐藏隐藏文件夹">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-        <span id="hidden-label">隐藏</span>
-      </button>
-      <button class="icon-btn" id="btn-scan">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
       </button>
     </div>
   </header>
 
-  <!-- 路径面包屑 -->
-  <div class="breadcrumb" id="breadcrumb">
-    <span class="bc-item active" data-path="root">📁 存储</span>
+  <!-- 快捷操作区 -->
+  <div class="quick-actions">
+    <button class="qa-btn qa-primary" id="btn-open-files">
+      <span class="qa-icon">🎬</span>
+      <span class="qa-label">打开视频</span>
+      <span class="qa-desc">选择单个或多个视频文件</span>
+    </button>
+    <button class="qa-btn" id="btn-open-folder">
+      <span class="qa-icon">📂</span>
+      <span class="qa-label">导入文件夹</span>
+      <span class="qa-desc">扫描整个文件夹中的视频</span>
+    </button>
   </div>
 
-  <!-- 扫描提示横幅 -->
-  <div class="scan-banner" id="scan-banner">
-    <div class="scan-icon">📂</div>
-    <div class="scan-text">
-      <p>选择文件夹开始扫描视频</p>
-      <p class="scan-sub">支持扫描隐藏文件夹（.开头）</p>
+  <!-- 统计 + 视图切换栏 -->
+  <div class="stats-bar" id="stats-bar">
+    <span class="stats-count" id="stats-count">未导入视频</span>
+    <div class="stats-actions">
+      <button class="icon-btn-sm" id="btn-view-flat" title="平铺视图">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </button>
+      <button class="icon-btn-sm" id="btn-view-tree" title="目录树视图">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/>
+          <path d="M3 18h7v7H3z"/><path d="M14 18h7v7h-7z"/>
+          <line x1="6.5" y1="10" x2="6.5" y2="14"/><line x1="6.5" y1="14" x2="17.5" y2="14"/>
+          <line x1="17.5" y1="14" x2="17.5" y2="18"/>
+        </svg>
+      </button>
+      <button class="icon-btn-sm" id="btn-toggle-hidden" title="显示/隐藏隐藏文件夹">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
     </div>
-    <button class="btn-primary" id="btn-open-folder">选择文件夹</button>
+  </div>
+
+  <!-- 多选操作栏 -->
+  <div class="select-bar" id="select-bar">
+    <button class="text-btn" id="btn-select-all">全选</button>
+    <button class="text-btn" id="btn-select-invert">反选</button>
+    <button class="text-btn" id="btn-select-cancel">取消</button>
+    <button class="text-btn text-btn-danger" id="btn-select-delete">删除所选</button>
+  </div>
+
+  <!-- 路径面包屑（目录树视图用） -->
+  <div class="breadcrumb" id="breadcrumb">
+    <span class="bc-item active" data-path="root">📁 全部视频</span>
+  </div>
+
+  <!-- 空状态引导 -->
+  <div class="empty-guide" id="empty-guide">
+    <div class="empty-icon">🎬</div>
+    <p class="empty-title">视频播放器</p>
+    <p class="empty-desc">点击上方按钮，选择要播放的视频文件或导入文件夹</p>
+    <p class="empty-desc-sub">支持 MP4 / MKV / AVI / RMVB / FLV 等所有常见格式</p>
   </div>
 
   <!-- 文件列表 -->
   <div class="file-list" id="file-list"></div>
 
-  <!-- 隐藏文件夹选择输入（触发原生文件夹选择）
-       注：accept 不限制类型，由 JS 过滤，避免 Android 过滤掉 MKV 等 -->
-  <input type="file"
-         id="folder-input"
-         webkitdirectory
-         multiple
-         style="display:none" />
-
-  <!-- NAS 地址输入（支持 SMB / HTTP 文件列表） -->
-  <input type="text"
-         id="nas-url-input"
-         placeholder="输入 NAS 地址，如 http://192.168.1.100:8080"
-         style="display:none" />
+  <!-- 隐藏的文件选择输入 -->
+  <input type="file" id="file-input" multiple accept="video/*" style="display:none" />
+  <input type="file" id="folder-input" webkitdirectory multiple style="display:none" />
 
 </div>
 
 <!-- ============ 页面二：播放器 ============ -->
 <div id="page-player" class="page">
 
-  <!-- 视频容器 -->
   <div class="video-wrap" id="video-wrap">
     <video id="main-video" playsinline preload="metadata"></video>
 
-    <!-- 中间大按钮（点击播放/暂停） -->
     <div class="center-tap" id="center-tap"></div>
 
-    <!-- 快退/快进手势区 -->
     <div class="gesture-left" id="gesture-left">
       <div class="gesture-hint" id="hint-left">-10s</div>
     </div>
@@ -97,10 +117,9 @@
       <div class="gesture-hint" id="hint-right">+10s</div>
     </div>
 
-    <!-- 播放/暂停大图标（动画） -->
     <div class="play-anim" id="play-anim">▶</div>
 
-    <!-- 顶部控制栏（返回 + 适应模式 + 标题 + 投屏） -->
+    <!-- 顶部控制栏 -->
     <div class="player-topbar" id="player-topbar">
       <button class="player-icon-btn" id="btn-back">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -109,7 +128,6 @@
       </button>
       <span class="video-title" id="video-title">视频标题</span>
 
-      <!-- 适应模式按钮：循环切换 contain → cover → rotate -->
       <button class="player-icon-btn fit-btn" id="btn-fit" title="切换适应模式">
         <svg id="fit-icon-contain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="5" width="18" height="14" rx="1"/>
@@ -118,14 +136,10 @@
         <svg id="fit-icon-cover" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
           <rect x="3" y="5" width="18" height="14" rx="1" fill="currentColor" opacity="0.3"/>
           <rect x="3" y="5" width="18" height="14" rx="1"/>
-          <line x1="3" y1="9" x2="21" y2="9" stroke-opacity="0.6"/>
-          <line x1="3" y1="15" x2="21" y2="15" stroke-opacity="0.6"/>
         </svg>
         <svg id="fit-icon-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
-          <path d="M20 7l-3-3-3 3"/>
-          <path d="M17 4v7a4 4 0 01-4 4H6"/>
-          <path d="M4 17l3 3 3-3"/>
-          <path d="M7 20v-7a4 4 0 014-4h7"/>
+          <path d="M20 7l-3-3-3 3"/><path d="M17 4v7a4 4 0 01-4 4H6"/>
+          <path d="M4 17l3 3 3-3"/><path d="M7 20v-7a4 4 0 014-4h7"/>
         </svg>
         <span id="fit-label">适应</span>
       </button>
@@ -133,26 +147,21 @@
       <button class="player-icon-btn cast-btn" id="btn-cast" title="投屏">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M2 8.5V6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H8.5"/>
-          <path d="M2 14.5A5.5 5.5 0 017.5 20"/>
-          <path d="M2 11a9 9 0 019 9"/>
+          <path d="M2 14.5A5.5 5.5 0 017.5 20"/><path d="M2 11a9 9 0 019 9"/>
           <circle cx="2" cy="20" r="1" fill="currentColor"/>
         </svg>
         <span class="cast-label" id="cast-label">投屏</span>
       </button>
     </div>
 
-    <!-- 视频方向提示角标 -->
     <div class="video-orient-badge" id="orient-badge">横屏 16:9</div>
 
-    <!-- 视频模式提示条 -->
     <div class="orientation-bar" id="orientation-bar">
       <span id="orientation-bar-text">适应模式：保留黑边</span>
     </div>
 
     <!-- 底部控制栏 -->
     <div class="player-controls" id="player-controls">
-
-      <!-- 进度条 -->
       <div class="progress-wrap">
         <span class="time-cur" id="time-cur">0:00</span>
         <div class="progress-bar-bg" id="progress-bg">
@@ -163,48 +172,34 @@
         <span class="time-total" id="time-total">0:00</span>
       </div>
 
-      <!-- 按钮行 -->
       <div class="ctrl-row">
         <button class="ctrl-btn" id="btn-skip-back">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-          </svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           <span>-10s</span>
         </button>
-
         <button class="ctrl-btn" id="btn-play-pause">
-          <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5,3 19,12 5,21"/>
-          </svg>
+          <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
           <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none">
             <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
           </svg>
         </button>
-
         <button class="ctrl-btn" id="btn-skip-fwd">
           <span>+10s</span>
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 18l8.5-6L6 6v12zm2-12h2v12H8z"/>
-          </svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-12h2v12H8z"/></svg>
         </button>
-
-        <!-- 倍速按钮 -->
         <button class="ctrl-btn speed-btn" id="btn-speed">
           <span id="speed-label">1×</span>
         </button>
-
-        <!-- 全屏 -->
         <button class="ctrl-btn" id="btn-fullscreen">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
           </svg>
         </button>
       </div>
-
     </div>
   </div>
 
-  <!-- 倍速选择面板 -->
+  <!-- 倍速面板 -->
   <div class="speed-panel" id="speed-panel">
     <div class="speed-title">播放速度</div>
     <div class="speed-options" id="speed-options">
@@ -225,30 +220,21 @@
     <div class="cast-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
         <path d="M2 8.5V6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H8.5"/>
-        <path d="M2 14.5A5.5 5.5 0 017.5 20"/>
-        <path d="M2 11a9 9 0 019 9"/>
+        <path d="M2 14.5A5.5 5.5 0 017.5 20"/><path d="M2 11a9 9 0 019 9"/>
         <circle cx="2" cy="20" r="1" fill="currentColor"/>
       </svg>
       投屏到设备
     </div>
     <div class="cast-scan">
       <div class="cast-scanning" id="cast-scanning">
-        <div class="scan-dot"></div>
-        <span>正在搜索设备...</span>
+        <div class="scan-dot"></div><span>正在搜索设备...</span>
       </div>
     </div>
     <div class="cast-devices" id="cast-devices"></div>
-    <div class="cast-tip">
-      <p>📱 支持以下投屏方式：</p>
-      <p>• AirPlay（iOS / macOS）</p>
-      <p>• Google Cast（Chromecast）</p>
-      <p>• DLNA（智能电视）</p>
-      <p>• Miracast（Android）</p>
-    </div>
     <button class="btn-close-panel" id="btn-close-cast">关闭</button>
   </div>
 
-  <!-- 播放列表侧栏 -->
+  <!-- 播放列表 -->
   <div class="playlist-sidebar" id="playlist-sidebar">
     <div class="playlist-header">
       <span>播放列表</span>
@@ -259,7 +245,7 @@
 
 </div>
 
-<!-- ============ 遮罩层 ============ -->
+<!-- 遮罩层 -->
 <div class="overlay" id="overlay"></div>
 
 <script src="app.js"></script>
