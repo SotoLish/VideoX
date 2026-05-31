@@ -17,7 +17,9 @@ import java.io.File;
 
 /**
  * 原生视频播放 Activity
- * 使用 ExoPlayer + FFmpeg 解码器，支持 RMVB 等所有常见格式
+ * 使用 ExoPlayer + Jellyfin FFmpeg 解码器，支持 RMVB 等所有常见格式
+ *
+ * v2.2: 支持 video_uri (content:// URI 直传) 和 video_path (file:// 路径) 两种方式
  */
 public class VideoXPlayerActivity extends AppCompatActivity {
 
@@ -26,6 +28,7 @@ public class VideoXPlayerActivity extends AppCompatActivity {
     private ImageButton btnBack;
     private TextView tvTitle;
     private String videoPath;
+    private String videoUri;
     private String videoName;
     private boolean playWhenReady = true;
     private long playbackPosition = 0;
@@ -51,10 +54,11 @@ public class VideoXPlayerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_videox_player);
 
         videoPath = getIntent().getStringExtra("video_path");
+        videoUri  = getIntent().getStringExtra("video_uri");
         videoName = getIntent().getStringExtra("video_name");
 
-        if (videoPath == null) {
-            Toast.makeText(this, "视频路径为空", Toast.LENGTH_SHORT).show();
+        if (videoPath == null && videoUri == null) {
+            Toast.makeText(this, "视频来源为空", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -78,30 +82,36 @@ public class VideoXPlayerActivity extends AppCompatActivity {
     }
 
     private void initPlayer() {
-        // 创建 ExoPlayer 实例
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
         playerView.setUseController(true);
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS);
 
-        // 设置视频源
-        File videoFile = new File(videoPath);
-        if (!videoFile.exists()) {
-            Toast.makeText(this, "文件不存在: " + videoPath, Toast.LENGTH_LONG).show();
-            finish();
-            return;
+        MediaItem mediaItem;
+
+        // --- 路径 1: content:// URI 直接使用（ExoPlayer 原生支持）---
+        if (videoUri != null && !videoUri.isEmpty()) {
+            Uri parsedUri = Uri.parse(videoUri);
+            mediaItem = MediaItem.fromUri(parsedUri);
+        }
+        // --- 路径 2: file:// 路径 ---
+        else {
+            File videoFile = new File(videoPath);
+            if (!videoFile.exists()) {
+                Toast.makeText(this, "文件不存在: " + videoPath, Toast.LENGTH_LONG).show();
+                finish();
+                return;
+            }
+            Uri fileUri = Uri.fromFile(videoFile);
+            mediaItem = MediaItem.fromUri(fileUri);
         }
 
-        Uri videoUri = Uri.fromFile(videoFile);
-        MediaItem mediaItem = MediaItem.fromUri(videoUri);
         player.setMediaItem(mediaItem);
 
-        // 播放状态监听
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int playbackState) {
                 if (playbackState == Player.STATE_ENDED) {
-                    // 播放完毕，自动返回
                     finish();
                 }
             }
@@ -115,7 +125,6 @@ public class VideoXPlayerActivity extends AppCompatActivity {
             }
         });
 
-        // 准备播放
         player.prepare();
         player.setPlayWhenReady(playWhenReady);
 
@@ -127,17 +136,13 @@ public class VideoXPlayerActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        if (player != null) {
-            player.setPlayWhenReady(playWhenReady);
-        }
+        if (player != null) player.setPlayWhenReady(playWhenReady);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (player != null) {
-            player.setPlayWhenReady(playWhenReady);
-        }
+        if (player != null) player.setPlayWhenReady(playWhenReady);
     }
 
     @Override
@@ -153,9 +158,7 @@ public class VideoXPlayerActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        if (player != null) {
-            player.setPlayWhenReady(false);
-        }
+        if (player != null) player.setPlayWhenReady(false);
     }
 
     @Override

@@ -37,7 +37,7 @@ const statsBar          = $('stats-bar');
 const statsCount        = $('stats-count');
 const selectBar         = $('select-bar');
 const btnOpenFiles      = $('btn-open-files');
-const btnOpenFolder     = $('btn-open-folder');
+const btnBrowseFolder   = $('btn-browse-folder');
 const btnViewFlat       = $('btn-view-flat');
 const btnViewTree       = $('btn-view-tree');
 const btnToggleHidden   = $('btn-toggle-hidden');
@@ -631,15 +631,100 @@ fileInput.addEventListener('change', (e) => {
   fileInput.value = '';
 });
 
-// ==================== 导入文件夹 ====================
-btnOpenFolder.addEventListener('click', () => folderInput.click());
+// ==================== 浏览文件夹（SAF 交互式浏览） ====================
+// v2.2: 使用 Android Storage Access Framework 让用户选择文件夹
+// 支持递归扫描子目录，交互式浏览视频文件
 
-folderInput.addEventListener('change', (e) => {
-  const files = Array.from(e.target.files);
-  if (files.length === 0) return;
-  importFiles(files, state.files.length > 0 ? 'append' : 'replace');
-  folderInput.value = '';
+btnBrowseFolder.addEventListener('click', () => {
+  try {
+    const bridge = window.__videoXBridge;
+    if (bridge && bridge.pickFolder) {
+      bridge.pickFolder();
+      // 启动轮询等待 SAF 结果
+      setTimeout(() => pollFolderPicker(0), 500);
+    } else {
+      // 降级：使用旧 webkitdirectory 方式
+      folderInput.click();
+    }
+  } catch (e) {
+    folderInput.click();
+  }
 });
+
+function pollFolderPicker(attempt) {
+  if (attempt > 20) return; // 最多 10 秒
+  try {
+    const bridge = window.__videoXBridge;
+    if (bridge) {
+      const treeUri = bridge.getFolderTreeUri();
+      if (treeUri) {
+        console.log('[VideoX] SAF 文件夹已选择:', treeUri);
+        loadSafFolder(treeUri);
+        return;
+      }
+    }
+  } catch (e) {}
+  setTimeout(() => pollFolderPicker(attempt + 1), 500);
+}
+
+function loadSafFolder(treeUri) {
+  try {
+    const bridge = window.__videoXBridge;
+    if (!bridge || !bridge.scanFolderVideos) {
+      showToast('文件夹浏览不可用', 'error');
+      return;
+    }
+
+    fileList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>正在扫描文件夹...</p></div>';
+    emptyGuide.style.display = 'none';
+
+    // scanFolderVideos 是同步的 Java 方法（JavascriptInterface）
+    // 使用 setTimeout 避免阻塞 UI
+    setTimeout(() => {
+      try {
+        const jsonStr = bridge.scanFolderVideos(treeUri);
+        const videos = JSON.parse(jsonStr);
+
+        if (!videos || videos.length === 0) {
+          fileList.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>此文件夹中没有视频文件</p></div>';
+          return;
+        }
+
+        // 转换为 VideoX 文件列表格式
+        state.files = videos.map(v => ({
+          name: v.name,
+          size: v.size,
+          uri: v.uri,           // SAF content:// URI
+          path: v.uri,          // 兼容旧代码
+          _dir: v.dir || 'root',
+          lastModified: Date.now(),
+        }));
+
+        // 重建文件夹结构
+        rebuildStructure();
+
+        state.folderStack = [];
+        state.expandedFolders = new Set();
+        const rootEntry = state.folderStructure['root'];
+        if (rootEntry) {
+          rootEntry.folders.forEach(f => state.expandedFolders.add('root/' + f));
+        }
+
+        updateStats();
+        refreshView();
+        showToast(`已加载 ${videos.length} 个视频`, 'success');
+
+      } catch (e) {
+        console.error('[VideoX] 扫描解析失败:', e);
+        fileList.innerHTML = '<div class="empty-state"><p>扫描失败: ' + e.message + '</p></div>';
+      }
+    }, 50);
+
+  } catch (e) {
+    console.error('[VideoX] loadSafFolder 失败:', e);
+    showToast('文件夹浏览失败', 'error');
+  }
+}
 
 // ==================== Toast 提示 ====================
 function showToast(msg, type) {
@@ -655,72 +740,102 @@ function showToast(msg, type) {
 }
 
 // ==================== 处理外部 Intent 视频（小米"其它应用打开"） ====================
-// 核心方案：通过 Android WebView.addJavascriptInterface（__videoXBridge）获取视频路径
-// 这比 evaluateJavascript 可靠得多 — addJavascriptInterface 在页面加载前就已注入
+// 核心方案（v2.2）：
+//   1. MainActivity 通过 addJavascriptInterface 注入 __videoXBridge
+//   2. content:// URI → 直接传给原生 ExoPlayer（不复制文件，秒开）
+//   3. file:// 路径 → 尝试 Capacitor 或原生 ExoPlayer
+//   4. 轮询超时增加到 120 次（36 秒），确保大文件复制有足够时间
 //
-// 流程：
-//   1. app.js 加载 → init() 启动轮询 __videoXBridge
-//   2. MainActivity 已通过 addJavascriptInterface 注入 bridge 对象
-//   3. bridge 返回 pendingVideoPath / pendingVideoName（由 Activity 设置）
-//   4. handleExternalVideo 直接进入播放器 — 跳过浏览器页面
+// 关键：所有外部视频都走原生 ExoPlayer，WebView <video> 标签不支持 content://！
 
-window.handleExternalVideo = function(path, name) {
-  console.log('[VideoX] 外部视频:', name, '路径:', path);
+window.__extVideoHandled = false;
 
-  // DOM 守卫：播放器页面元素必须存在
-  if (!pagePlayer || !video) {
-    console.warn('[VideoX] DOM 未就绪，200ms 后重试...');
-    setTimeout(() => window.handleExternalVideo(path, name), 200);
+window.handleExternalVideo = function(opts) {
+  // opts: { path, uri, name }
+  const name = opts.name || opts;
+  const path = opts.path;
+  const uri  = opts.uri;
+
+  console.log('[VideoX] 外部视频:', name, 'path:', path, 'uri:', uri);
+
+  if (window.__extVideoHandled) {
+    console.log('[VideoX] 外部视频已处理过，跳过重复');
     return;
   }
 
-  // 创建伪 File 对象
-  const fakeFile = {
-    name: name,
-    size: 0,
-    path: path,
-    _dir: 'root',
-    lastModified: Date.now(),
-  };
-
-  // 去重
-  let existingIdx = state.files.findIndex(f => f.path === path);
-  if (existingIdx < 0) {
-    state.files.push(fakeFile);
-    if (!state.folderStructure['root']) {
-      state.folderStructure['root'] = { folders: new Set(), files: [] };
-    }
-    state.folderStructure['root'].files.push(fakeFile);
-    existingIdx = state.files.length - 1;
+  // content:// URI → 全部走原生 ExoPlayer
+  if (uri && uri.startsWith('content://')) {
+    window.__extVideoHandled = true;
+    playNativeUri(uri, name);
+    return;
   }
 
-  // 后台更新统计（不渲染浏览器页面）
-  updateStats();
+  // file:// 路径 → 根据格式选择播放器
+  if (path) {
+    window.__extVideoHandled = true;
 
-  // 直接进入播放器
-  playVideo(existingIdx);
+    // 需要原生解码的格式 → 原生 ExoPlayer
+    if (needsNativePlayer(name)) {
+      playNativeFile(path, name);
+      return;
+    }
+
+    // WebView 支持的格式 → 用 Capacitor server 或 file://
+    // DOM 守卫
+    if (!pagePlayer || !video || !videoTitle) {
+      setTimeout(() => window.handleExternalVideo(opts), 200);
+      return;
+    }
+
+    // 加入文件列表（后台，不渲染）
+    const fakeFile = {
+      name: name, size: 0, path: path,
+      _dir: 'root', lastModified: Date.now(),
+    };
+    let idx = state.files.findIndex(f => f.path === path);
+    if (idx < 0) {
+      state.files.push(fakeFile);
+      if (!state.folderStructure['root']) {
+        state.folderStructure['root'] = { folders: new Set(), files: [] };
+      }
+      state.folderStructure['root'].files.push(fakeFile);
+      idx = state.files.length - 1;
+    }
+    updateStats();
+    playVideo(idx);
+    return;
+  }
+
+  console.warn('[VideoX] 外部视频无有效路径或 URI');
 };
 
 // 轮询 __videoXBridge，检查是否有外部视频
+// v2.2: 大幅增加超时（120次×300ms = 36秒），处理大文件复制
 function pollExternalVideoBridge(attempt) {
-  if (attempt > 15) return; // 最多 4.5 秒
+  var maxAttempts = 120; // 最多 36 秒
+  if (attempt > maxAttempts) {
+    console.warn('[VideoX] Bridge 轮询超时 (' + maxAttempts + ' 次)');
+    return;
+  }
 
   try {
-    const bridge = window.__videoXBridge;
+    var bridge = window.__videoXBridge;
     if (bridge) {
-      const path = bridge.getPendingVideoPath();
-      const name = bridge.getPendingVideoName();
-      if (path && name) {
-        console.log('[VideoX] Bridge 轮询成功 (attempt ' + attempt + ')');
-        handleExternalVideo(path, name);
-        return; // 成功，停止轮询
+      var uri  = bridge.getPendingVideoUri();
+      var path = bridge.getPendingVideoPath();
+      var name = bridge.getPendingVideoName();
+
+      if ((uri || path) && name) {
+        console.log('[VideoX] Bridge 命中 (attempt=' + attempt + ', uri=' + !!uri + ', path=' + !!path + ')');
+        handleExternalVideo({ uri: uri, path: path, name: name });
+        return;
       }
     }
   } catch (e) {
-    console.warn('[VideoX] Bridge 读取异常:', e.message);
+    console.warn('[VideoX] Bridge 异常:', e.message);
   }
 
-  setTimeout(() => pollExternalVideoBridge(attempt + 1), 300);
+  setTimeout(function() { pollExternalVideoBridge(attempt + 1); }, 300);
 }
 
 // ==================== 播放视频 ====================
@@ -739,9 +854,15 @@ function playVideo(index) {
   // 退出多选模式
   if (state.selectMode) exitSelectMode();
 
-  // 检测是否需要原生播放器
+  // --- v2.2: 外部 content:// URI → 原生 ExoPlayer ---
+  if (file.uri && file.uri.startsWith('content://')) {
+    playNativeUri(file.uri, file.name);
+    return;
+  }
+
+  // 检测是否需要原生播放器（格式不支持 WebView）
   if (needsNativePlayer(file.name)) {
-    playNative(file);
+    playNativeFile(file.path || '', file.name);
     return;
   }
 
@@ -750,12 +871,11 @@ function playVideo(index) {
     URL.revokeObjectURL(video.src);
   }
 
-  // 尝试使用 path 直接播放（外部 intent 文件的缓存路径）
+  // file:// 本地路径 → Capacitor server 或 file://
   if (file.path && file.path.startsWith('/') && !(file instanceof File)) {
-    // 使用 Capacitor local server URL
-    const Capacitor = window.Capacitor;
-    if (Capacitor && Capacitor.convertFileSrc) {
-      video.src = Capacitor.convertFileSrc(file.path);
+    const Cap = window.Capacitor;
+    if (Cap && Cap.convertFileSrc) {
+      video.src = Cap.convertFileSrc(file.path);
     } else {
       video.src = 'file://' + file.path;
     }
@@ -779,19 +899,50 @@ function playVideo(index) {
 }
 
 // ==================== 原生播放器（Capacitor 插件） ====================
-async function playNative(file) {
+
+/**
+ * 用原生 ExoPlayer 播放 content:// URI（外部 Intent 传入）
+ * v2.2: 所有外部 content:// URI 都走这条路 — 无需文件复制，秒开
+ */
+async function playNativeUri(uri, name) {
   try {
     const { VideoXPlayer } = window.Capacitor?.Plugins || {};
     if (VideoXPlayer) {
-      const filePath = file.path || file.webkitRelativePath || '';
-      await VideoXPlayer.play({ path: filePath, name: file.name });
-    } else {
-      alert('⚠️ ' + file.name + '\n\n此格式需要原生播放器支持\n请在 APK 中运行此功能');
+      console.log('[VideoX] 原生播放 URI:', uri, name);
+      await VideoXPlayer.play({ uri: uri, name: name });
+      return;
     }
   } catch (e) {
-    console.warn('[VideoX] 原生播放器不可用:', e.message);
-    alert('⚠️ ' + file.name + '\n\n需要原生播放器（仅 APK 版本支持）');
+    console.warn('[VideoX] 原生 URI 播放失败:', e.message);
   }
+  alert('⚠️ ' + name + '\n\n无法打开此视频\n请确保在 APK 中运行');
+}
+
+/**
+ * 用原生 ExoPlayer 播放 file:// 路径（本地文件）
+ */
+async function playNativeFile(filePath, name) {
+  try {
+    const { VideoXPlayer } = window.Capacitor?.Plugins || {};
+    if (VideoXPlayer) {
+      console.log('[VideoX] 原生播放文件:', filePath, name);
+      await VideoXPlayer.play({ path: filePath, name: name });
+      return;
+    }
+  } catch (e) {
+    console.warn('[VideoX] 原生文件播放失败:', e.message);
+  }
+  alert('⚠️ ' + name + '\n\n此格式需要原生播放器支持\n请在 APK 中运行此功能');
+}
+
+/**
+ * 旧接口兼容 — 根据 file 对象选择播放方式
+ */
+async function playNative(file) {
+  if (file.uri && file.uri.startsWith('content://')) {
+    return playNativeUri(file.uri, file.name);
+  }
+  return playNativeFile(file.path || file.webkitRelativePath || '', file.name);
 }
 
 // ==================== 视频方向检测 ====================

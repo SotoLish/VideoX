@@ -14,8 +14,9 @@ import java.io.File;
 
 /**
  * VideoX 原生播放器插件
- * 用于播放 WebView 不支持的视频格式（如 RMVB、RM 等）
- * 通过 ExoPlayer Activity 实现原生解码播放
+ *
+ * v2.2: 支持 file:// 路径和 content:// URI 两种输入
+ * content:// URI 直传 ExoPlayer，无需文件复制，实现秒开
  */
 @CapacitorPlugin(name = "VideoXPlayer")
 public class VideoXPlayerPlugin extends Plugin {
@@ -26,34 +27,50 @@ public class VideoXPlayerPlugin extends Plugin {
     @PluginMethod
     public void play(PluginCall call) {
         String filePath = call.getString("path");
-        String fileName = call.getString("name", "未知视频");
+        String videoUri  = call.getString("uri");   // v2.2: content:// URI
+        String fileName  = call.getString("name", "未知视频");
 
-        if (filePath == null || filePath.isEmpty()) {
-            call.reject("缺少文件路径参数");
+        // --- 输入校验 ---
+        if (videoUri != null && !videoUri.isEmpty()) {
+            // content:// URI 路径 — 直接传给 ExoPlayer
+            Log.d(TAG, "准备播放 (URI): " + fileName + " → " + videoUri);
+            launchPlayer(null, videoUri, fileName, call);
             return;
         }
 
+        if (filePath == null || filePath.isEmpty()) {
+            call.reject("缺少文件路径参数 (path 或 uri)");
+            return;
+        }
+
+        // file:// 路径 — 校验文件是否存在
         File file = new File(filePath);
         if (!file.exists()) {
             call.reject("文件不存在: " + filePath);
             return;
         }
 
-        Log.d(TAG, "准备播放: " + fileName + " (" + filePath + ")");
+        Log.d(TAG, "准备播放 (文件): " + fileName + " (" + filePath + ")");
+        launchPlayer(filePath, null, fileName, call);
+    }
 
+    private void launchPlayer(String filePath, String videoUri, String fileName, PluginCall call) {
         pendingCall = call;
 
         Intent intent = new Intent(getActivity(), VideoXPlayerActivity.class);
-        intent.putExtra("video_path", filePath);
+        if (filePath != null) {
+            intent.putExtra("video_path", filePath);
+        }
+        if (videoUri != null) {
+            intent.putExtra("video_uri", videoUri);
+        }
         intent.putExtra("video_name", fileName);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-        // 用 startActivityForResult 替代已弃用的 saveCall
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             startActivityForResult(call, intent, "playVideoResult");
         } else {
             getActivity().startActivity(intent);
-            // 旧版 Android 直接返回成功
             JSObject ret = new JSObject();
             ret.put("completed", true);
             call.resolve(ret);
@@ -63,7 +80,6 @@ public class VideoXPlayerPlugin extends Plugin {
     @Override
     protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
         super.handleOnActivityResult(requestCode, resultCode, data);
-
         if (pendingCall != null) {
             JSObject ret = new JSObject();
             ret.put("completed", true);
@@ -76,7 +92,6 @@ public class VideoXPlayerPlugin extends Plugin {
     @PluginMethod
     public void getSupportedFormats(PluginCall call) {
         JSObject ret = new JSObject();
-        // ExoPlayer + FFmpeg 扩展支持几乎所有格式
         String[] formats = {
             "rmvb", "rm", "wmv", "asf", "flv", "f4v",
             "mpg", "mpeg", "vob", "evo", "m2ts", "mts",
