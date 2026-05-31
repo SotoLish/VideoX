@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VideoX</string>
+    <string name="title_activity_main">VideoX</string>
+    <string name="package_name">com.givemesix.videox</string>
+    <string name="custom_url_scheme">com.givemesix.videox</string>
+</resources>

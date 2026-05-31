@@ -1,0 +1,23 @@
+{
+  "name": "videox",
+  "version": "1.0.0",
+  "description": "VideoX - 极速视频播放器，支持隐藏文件夹扫描、倍速播放、投屏",
+  "main": "www/index.html",
+  "scripts": {
+    "sync": "npx cap sync",
+    "open": "npx cap open android",
+    "build": "npx cap sync && npx cap open android"
+  },
+  "author": "givemesix",
+  "license": "MIT",
+  "keywords": [],
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/filesystem": "^8.1.2"
+  },
+  "devDependencies": {
+    "@bubblewrap/cli": "^1.24.1"
+  }
+}

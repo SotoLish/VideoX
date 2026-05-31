@@ -1,0 +1,22 @@
+{
+  "appId": "com.givemesix.videox",
+  "appName": "VideoX",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "minSdkVersion": 22,
+    "backgroundColor": "ff0f0f0f"
+  },
+  "plugins": {
+    "Filesystem": {
+      "androidPermissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "READ_MEDIA_VIDEO"]
+    }
+  }
+}
