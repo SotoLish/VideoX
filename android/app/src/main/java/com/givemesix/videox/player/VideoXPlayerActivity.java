@@ -12,6 +12,7 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
+import com.givemesix.videox.R;
 import java.io.File;
 
 /**

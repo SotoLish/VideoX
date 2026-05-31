@@ -28,6 +28,7 @@ repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
+    maven { url 'https://repo.jellyfin.org/releases' }
 }
 
 dependencies {
@@ -41,9 +42,9 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
 
-    // ExoPlayer + FFmpeg 扩展（支持 RMVB 等所有格式）
+    // ExoPlayer + Jellyfin FFmpeg 扩展（支持 RMVB/VOB/WMV 等所有格式）
     implementation 'androidx.media3:media3-exoplayer:1.6.1'
-    implementation 'androidx.media3:media3-exoplayer-ffmpeg:1.6.1'
+    implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.6.1+2'
     implementation 'androidx.media3:media3-ui:1.6.1'
 }
 

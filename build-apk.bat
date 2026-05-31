@@ -22,7 +22,7 @@ echo   Android SDK: %ANDROID_HOME%
 echo.
 
 echo [2/4] 安装 Android SDK 组件（首次需要联网）...
-sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" 2>&1 | findstr /i "done\|Install\|Accept"
+sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 | findstr /i "done\|Install\|Accept"
 echo.
 
 echo [3/4] 同步 Capacitor 项目...
