@@ -655,7 +655,23 @@ function showToast(msg, type) {
 }
 
 // ==================== 处理外部 Intent 视频（小米"其它应用打开"） ====================
+// 此函数由 Android MainActivity 通过 evaluateJavascript 调用
+// 核心原则：跳过浏览器页面，直接进入播放器
+
+window.__externalVideoInjected = false;
+
 window.handleExternalVideo = function(path, name) {
+  console.log('[VideoX] 外部视频:', name, '路径:', path);
+
+  // 如果 DOM / 播放器页面还没准备好，等一会儿重试
+  if (!pagePlayer || !video) {
+    console.warn('[VideoX] DOM 未就绪，500ms 后重试...');
+    setTimeout(() => window.handleExternalVideo(path, name), 500);
+    return;
+  }
+
+  window.__externalVideoInjected = true;
+
   // 创建伪 File 对象
   const fakeFile = {
     name: name,
@@ -665,26 +681,22 @@ window.handleExternalVideo = function(path, name) {
     lastModified: Date.now(),
   };
 
-  // 清理之前的文件列表，直接播放
-  state.files = state.files || [];
-  // 检查是否已存在
-  const exists = state.files.find(f => f.path === path);
-  if (!exists) {
+  // 去重：检查是否已存在
+  let existingIdx = state.files.findIndex(f => f.path === path);
+  if (existingIdx < 0) {
     state.files.push(fakeFile);
-    if (!state.folderStructure['root']) state.folderStructure['root'] = { folders: new Set(), files: [] };
+    if (!state.folderStructure['root']) {
+      state.folderStructure['root'] = { folders: new Set(), files: [] };
+    }
     state.folderStructure['root'].files.push(fakeFile);
+    existingIdx = state.files.length - 1;
   }
 
+  // 后台更新状态，但不渲染浏览器页面
   updateStats();
-  refreshView();
 
-  // 直接播放
-  const idx = state.files.indexOf(fakeFile);
-  if (idx >= 0) {
-    setTimeout(() => playVideo(idx), 300);
-  }
-
-  showToast('已接收外部视频: ' + name, 'success');
+  // 直接跳转播放器页面（关键：不调用 refreshView，避免浏览器页面闪烁）
+  playVideo(existingIdx);
 };
 
 window.handleExternalVideoError = function(msg) {
@@ -694,6 +706,13 @@ window.handleExternalVideoError = function(msg) {
 // ==================== 播放视频 ====================
 function playVideo(index) {
   if (index < 0 || index >= state.files.length) return;
+
+  // 防御：播放器 DOM 还没加载好（外部 Intent 最早触发时可能出现）
+  if (!pagePlayer || !video || !videoTitle) {
+    setTimeout(() => playVideo(index), 200);
+    return;
+  }
+
   state.currentIndex = index;
   const file = state.files[index];
 
