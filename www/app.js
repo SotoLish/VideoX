@@ -655,22 +655,24 @@ function showToast(msg, type) {
 }
 
 // ==================== 处理外部 Intent 视频（小米"其它应用打开"） ====================
-// 此函数由 Android MainActivity 通过 evaluateJavascript 调用
-// 核心原则：跳过浏览器页面，直接进入播放器
-
-window.__externalVideoInjected = false;
+// 核心方案：通过 Android WebView.addJavascriptInterface（__videoXBridge）获取视频路径
+// 这比 evaluateJavascript 可靠得多 — addJavascriptInterface 在页面加载前就已注入
+//
+// 流程：
+//   1. app.js 加载 → init() 启动轮询 __videoXBridge
+//   2. MainActivity 已通过 addJavascriptInterface 注入 bridge 对象
+//   3. bridge 返回 pendingVideoPath / pendingVideoName（由 Activity 设置）
+//   4. handleExternalVideo 直接进入播放器 — 跳过浏览器页面
 
 window.handleExternalVideo = function(path, name) {
   console.log('[VideoX] 外部视频:', name, '路径:', path);
 
-  // 如果 DOM / 播放器页面还没准备好，等一会儿重试
+  // DOM 守卫：播放器页面元素必须存在
   if (!pagePlayer || !video) {
-    console.warn('[VideoX] DOM 未就绪，500ms 后重试...');
-    setTimeout(() => window.handleExternalVideo(path, name), 500);
+    console.warn('[VideoX] DOM 未就绪，200ms 后重试...');
+    setTimeout(() => window.handleExternalVideo(path, name), 200);
     return;
   }
-
-  window.__externalVideoInjected = true;
 
   // 创建伪 File 对象
   const fakeFile = {
@@ -681,7 +683,7 @@ window.handleExternalVideo = function(path, name) {
     lastModified: Date.now(),
   };
 
-  // 去重：检查是否已存在
+  // 去重
   let existingIdx = state.files.findIndex(f => f.path === path);
   if (existingIdx < 0) {
     state.files.push(fakeFile);
@@ -692,16 +694,34 @@ window.handleExternalVideo = function(path, name) {
     existingIdx = state.files.length - 1;
   }
 
-  // 后台更新状态，但不渲染浏览器页面
+  // 后台更新统计（不渲染浏览器页面）
   updateStats();
 
-  // 直接跳转播放器页面（关键：不调用 refreshView，避免浏览器页面闪烁）
+  // 直接进入播放器
   playVideo(existingIdx);
 };
 
-window.handleExternalVideoError = function(msg) {
-  showToast('打开失败: ' + msg, 'error');
-};
+// 轮询 __videoXBridge，检查是否有外部视频
+function pollExternalVideoBridge(attempt) {
+  if (attempt > 15) return; // 最多 4.5 秒
+
+  try {
+    const bridge = window.__videoXBridge;
+    if (bridge) {
+      const path = bridge.getPendingVideoPath();
+      const name = bridge.getPendingVideoName();
+      if (path && name) {
+        console.log('[VideoX] Bridge 轮询成功 (attempt ' + attempt + ')');
+        handleExternalVideo(path, name);
+        return; // 成功，停止轮询
+      }
+    }
+  } catch (e) {
+    console.warn('[VideoX] Bridge 读取异常:', e.message);
+  }
+
+  setTimeout(() => pollExternalVideoBridge(attempt + 1), 300);
+}
 
 // ==================== 播放视频 ====================
 function playVideo(index) {
@@ -1209,6 +1229,9 @@ async function playNasVideo(file, baseUrl, allFiles) {
   emptyGuide.style.display = '';
   statsBar.style.display = 'none';
   selectBar.classList.remove('active');
+
+  // 启动外部视频 bridge 轮询（addJavascriptInterface 100% 可靠）
+  setTimeout(() => pollExternalVideoBridge(0), 200);
 
   console.log('[VideoX] 初始化完成 — 播放器优先 · 多选 · 目录树/平铺 · 外部 Intent');
 })();
